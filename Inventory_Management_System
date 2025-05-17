@@ -1,0 +1,183 @@
+import json
+import os
+import getpass
+
+DATA_FILE = "inventory_data.json"
+
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        return {"products": [], "users": {"admin": "admin123"}}
+    with open(DATA_FILE, "r") as f:
+        return json.load(f)
+
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+def input_int(prompt, allow_blank=False, default=None):
+    while True:
+        value = input(prompt)
+        if allow_blank and value == '':
+            return default
+        try:
+            return int(value)
+        except ValueError:
+            print("Please enter a valid integer.")
+
+def input_float(prompt, allow_blank=False, default=None):
+    while True:
+        value = input(prompt)
+        if allow_blank and value == '':
+            return default
+        try:
+            return float(value)
+        except ValueError:
+            print("Please enter a valid number.")
+
+def authenticate(users):
+    print("=== Login ===")
+    username = input("Username: ").strip()
+    password = getpass.getpass("Password: ").strip()
+    if username in users and users[username] == password:
+        print("Login successful!\n")
+        return username
+    else:
+        print("Invalid credentials.\n")
+        return None
+
+def change_password(data, username):
+    print("=== Change Password ===")
+    old_pw = getpass.getpass("Current password: ").strip()
+    if data["users"].get(username) != old_pw:
+        print("Incorrect current password.\n")
+        return
+    new_pw = getpass.getpass("New password: ").strip()
+    confirm_pw = getpass.getpass("Confirm new password: ").strip()
+    if new_pw != confirm_pw:
+        print("Passwords do not match.\n")
+        return
+    if not new_pw:
+        print("Password cannot be empty.\n")
+        return
+    data["users"][username] = new_pw
+    save_data(data)
+    print("Password changed successfully!\n")
+
+def add_product(data):
+    name = input("Product name: ").strip()
+    if not name:
+        print("Product name cannot be empty.\n")
+        return
+    quantity = input_int("Quantity: ")
+    price = input_float("Price per unit: ")
+    prod_id = max([p["id"] for p in data["products"]], default=0) + 1
+    data["products"].append({
+        "id": prod_id,
+        "name": name,
+        "quantity": quantity,
+        "price": price,
+        "sales": 0
+    })
+    save_data(data)
+    print(f"Added product '{name}'.\n")
+
+def list_products(data):
+    if not data["products"]:
+        print("No products found.\n")
+        return
+    print("ID | Name           | Quantity | Price | Sales")
+    print("-----------------------------------------------")
+    for p in data["products"]:
+        print(f"{p['id']:2} | {p['name'][:14]:14} | {p['quantity']:8} | {p['price']:5.2f} | {p['sales']:5}")
+    print()
+
+def edit_product(data):
+    prod_id = input_int("Enter product ID to edit: ")
+    for p in data["products"]:
+        if p["id"] == prod_id:
+            new_name = input(f"New name (leave blank to keep '{p['name']}'): ").strip() or p["name"]
+            new_qty = input_int(f"New quantity (current {p['quantity']}): ", allow_blank=True, default=p["quantity"])
+            new_price = input_float(f"New price (current {p['price']}): ", allow_blank=True, default=p["price"])
+            p["name"] = new_name
+            p["quantity"] = new_qty
+            p["price"] = new_price
+            save_data(data)
+            print("Product updated.\n")
+            return
+    print("Product not found.\n")
+
+def delete_product(data):
+    prod_id = input_int("Enter product ID to delete: ")
+    before_count = len(data["products"])
+    data["products"] = [p for p in data["products"] if p["id"] != prod_id]
+    if len(data["products"]) < before_count:
+        save_data(data)
+        print("Product deleted.\n")
+    else:
+        print("Product not found.\n")
+
+def record_sale(data):
+    prod_id = input_int("Enter product ID sold: ")
+    qty_sold = input_int("Quantity sold: ")
+    for p in data["products"]:
+        if p["id"] == prod_id:
+            if p["quantity"] >= qty_sold:
+                p["quantity"] -= qty_sold
+                p["sales"] += qty_sold
+                save_data(data)
+                print("Sale recorded.\n")
+            else:
+                print("Not enough stock.\n")
+            return
+    print("Product not found.\n")
+
+def low_stock_alert(data):
+    low = [p for p in data["products"] if p["quantity"] <= 5]
+    if low:
+        print("Low stock products (<=5):")
+        for p in low:
+            print(f" - {p['name']} (Qty: {p['quantity']})")
+        print()
+    else:
+        print("No low stock products.\n")
+
+def main():
+    data = load_data()
+    username = authenticate(data["users"])
+    if not username:
+        return
+
+    while True:
+        print("1. List Products")
+        print("2. Add Product")
+        print("3. Edit Product")
+        print("4. Delete Product")
+        print("5. Record Sale")
+        print("6. Low Stock Alert")
+        print("7. Change Password")
+        print("8. Exit")
+
+        choice = input("Choose option: ").strip()
+        print()
+        if choice == "1":
+            list_products(data)
+        elif choice == "2":
+            add_product(data)
+        elif choice == "3":
+            edit_product(data)
+        elif choice == "4":
+            delete_product(data)
+        elif choice == "5":
+            record_sale(data)
+        elif choice == "6":
+            low_stock_alert(data)
+        elif choice == "7":
+            change_password(data, username)
+        elif choice == "8":
+            print("Goodbye!")
+            break
+        else:
+            print("Invalid choice.\n")
+
+if __name__ == "__main__":
+    main()
